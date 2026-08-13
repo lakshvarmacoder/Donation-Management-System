@@ -22,6 +22,25 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Vercel Serverless Path Rewriter Middleware
+@app.middleware("http")
+async def vercel_asgi_path_rewriter(request: Request, call_next):
+    path = request.scope.get("path", "")
+    
+    # 1. Check query parameter `path` passed by Vercel rewrite
+    query_path = request.query_params.get("path")
+    if query_path:
+        request.scope["path"] = query_path
+    elif path == "/api/index.py" or path == "/api/index":
+        request.scope["path"] = "/"
+    elif path.startswith("/api/index.py"):
+        request.scope["path"] = path[len("/api/index.py"):] or "/"
+    elif path.startswith("/api/index"):
+        request.scope["path"] = path[len("/api/index"):] or "/"
+
+    return await call_next(request)
+
+
 # Enable CORS for external client site integrations
 app.add_middleware(
     CORSMiddleware,
@@ -32,6 +51,12 @@ app.add_middleware(
 )
 
 
+@app.get("/", tags=["Health"])
+async def root_check():
+    """Root status check endpoint."""
+    return {"status": "ok", "app": settings.app_name, "version": "1.0.0"}
+
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""
@@ -40,15 +65,3 @@ async def health_check():
 
 # Register API v1 Routers
 app.include_router(api_v1_router, prefix="/api/v1")
-
-
-@app.get("/", tags=["Health"])
-async def root_check(request: Request):
-    """Root status check endpoint."""
-    return {
-        "status": "ok",
-        "app": settings.app_name,
-        "version": "1.0.0",
-        "scope_path": request.scope.get("path"),
-        "headers": dict(request.headers)
-    }
