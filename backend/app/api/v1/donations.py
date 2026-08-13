@@ -192,8 +192,7 @@ async def _verify_and_fetch_github_user(username: str) -> dict:
     headers = {"User-Agent": "DonorWallDemo/1.0"}
 
     try:
-        transport = httpx.AsyncHTTPTransport(local_address="0.0.0.0")
-        async with httpx.AsyncClient(timeout=5.0, transport=transport) as client:
+        async with httpx.AsyncClient(timeout=3.0) as client:
             resp = await client.get(url, headers=headers)
             if resp.status_code == 404:
                 raise HTTPException(
@@ -210,7 +209,7 @@ async def _verify_and_fetch_github_user(username: str) -> dict:
                 }
     except HTTPException:
         raise
-    except Exception as e:
+    except BaseException as e:
         logger.warning("GitHub API unreachable for '%s': %s", clean_user, e)
 
     # Default fallback if GitHub API rate-limits or network is unreachable
