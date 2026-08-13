@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional, List
+from pydantic import field_validator
+from typing import Optional, List, Union
 import urllib.parse
+import json
 
 
 class Settings(BaseSettings):
@@ -14,6 +16,7 @@ class Settings(BaseSettings):
     dbname: str = "postgres"
     
     raw_database_url: Optional[str] = None
+    database_url_env: Optional[str] = None
     
     # Supabase Credentials
     supabase_url: Optional[str] = None
@@ -27,13 +30,26 @@ class Settings(BaseSettings):
     
     # App Config & CORS
     app_name: str = "Donation Management System"
-    debug: bool = True
-    cors_origins: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    debug: bool = False
+    cors_origins: Union[List[str], str] = ["http://localhost:3000", "http://localhost:8000"]
     
+    @field_validator("cors_origins", mode="before")
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            v_trimmed = v.strip()
+            if v_trimmed.startswith("["):
+                try:
+                    return json.loads(v_trimmed)
+                except Exception:
+                    pass
+            return [i.strip() for i in v_trimmed.split(",") if i.strip()]
+        return v
+
     @property
     def database_url(self) -> str:
-        if self.raw_database_url and "YOUR_PROJECT_REF" not in self.raw_database_url:
-            return self.raw_database_url
+        url = self.raw_database_url or self.database_url_env
+        if url and "YOUR_PROJECT_REF" not in url:
+            return url
         pwd = urllib.parse.quote_plus(self.password) if self.password else ""
         return f"postgresql+asyncpg://{self.user}:{pwd}@{self.host}:{self.port}/{self.dbname}"
 
