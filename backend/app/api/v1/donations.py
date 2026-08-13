@@ -28,6 +28,8 @@ RECEIPT_ID_LENGTH = 8
 
 logger = logging.getLogger(__name__)
 
+router = APIRouter(prefix="/donations", tags=["Donations"])
+
 
 # ─── Public Endpoints ───────────────────────────────────────────────────────────
 
