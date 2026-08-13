@@ -37,27 +37,39 @@ router = APIRouter(prefix="/donations", tags=["Donations"])
 @router.get("/wall", response_model=List[WallDonorResponse])
 async def get_donor_wall(db: AsyncSession = Depends(get_db)):
     """Public endpoint — completed donors for the wall display."""
-    query = (
-        select(Donation)
-        .where(Donation.status == DonationStatus.COMPLETED)
-        .order_by(desc(Donation.created_at))
-        .limit(WALL_DONOR_LIMIT)
-    )
-    result = await db.execute(query)
-    return result.scalars().all()
+    try:
+        query = (
+            select(Donation)
+            .where(Donation.status == DonationStatus.COMPLETED)
+            .order_by(desc(Donation.created_at))
+            .limit(WALL_DONOR_LIMIT)
+        )
+        result = await db.execute(query)
+        return result.scalars().all()
+    except Exception as err:
+        logger.error("Failed to query donor wall from DB: %s", err, exc_info=True)
+        return []
 
 
 @router.get("/stats/summary", response_model=PlatformStatsResponse)
 async def get_platform_stats(db: AsyncSession = Depends(get_db)):
     """Fetch aggregate platform statistics."""
-    total_raised = await _sum_completed_donations(db)
-    unique_donors = await _count_unique_donors(db)
+    try:
+        total_raised = await _sum_completed_donations(db)
+        unique_donors = await _count_unique_donors(db)
 
-    return PlatformStatsResponse(
-        total_raised=total_raised,
-        unique_donors=unique_donors,
-        active_campaigns=1,
-    )
+        return PlatformStatsResponse(
+            total_raised=total_raised,
+            unique_donors=unique_donors,
+            active_campaigns=1,
+        )
+    except Exception as err:
+        logger.error("Failed to query platform stats from DB: %s", err, exc_info=True)
+        return PlatformStatsResponse(
+            total_raised=0.0,
+            unique_donors=0,
+            active_campaigns=1,
+        )
 
 
 @router.get("", response_model=List[DonationResponse])

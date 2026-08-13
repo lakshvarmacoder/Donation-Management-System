@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         url = self.raw_database_url or self.database_url_val
         if url and "YOUR_PROJECT_REF" not in url:
+            if "supabase.co" in url and "ssl" not in url:
+                sep = "&" if "?" in url else "?"
+                url = f"{url}{sep}ssl=require"
             return url
         pwd = urllib.parse.quote_plus(self.password) if self.password else ""
         return f"postgresql+asyncpg://{self.user}:{pwd}@{self.host}:{self.port}/{self.dbname}"
