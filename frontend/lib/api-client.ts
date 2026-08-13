@@ -2,13 +2,8 @@ import type { Donation } from "@/lib/donations"
 
 export function getBackendUrl(): string {
   const url = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL || "http://localhost:8000"
-  const ALLOWED_ORIGINS = [
-    "http://localhost:8000",
-    "https://localhost:8000",
-  ]
-  const configuredOrigin = process.env.NEXT_PUBLIC_BACKEND_URL || process.env.BACKEND_URL
-  if (configuredOrigin && !ALLOWED_ORIGINS.some((allowed) => configuredOrigin.startsWith(allowed))) {
-    throw new Error(`Untrusted BACKEND_URL: '${configuredOrigin}'. Add it to ALLOWED_ORIGINS if intentional.`)
+  if (url && !url.startsWith("http://") && !url.startsWith("https://")) {
+    throw new Error(`Invalid BACKEND_URL protocol: '${url}'. Must start with http:// or https://`)
   }
   return url
 }
