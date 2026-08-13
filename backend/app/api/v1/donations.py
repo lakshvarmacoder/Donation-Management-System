@@ -85,23 +85,33 @@ async def list_donations(db: AsyncSession = Depends(get_db)):
 @router.post("", response_model=RazorpayOrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_donation(payload: DonationCreate, db: AsyncSession = Depends(get_db)):
     """Initiate a donation, verify GitHub user, persist a pending record, and return Razorpay order params."""
-    gh_profile = await _verify_and_fetch_github_user(payload.github_username)
+    try:
+        gh_profile = await _verify_and_fetch_github_user(payload.github_username)
 
-    # Reject if this GitHub username already has a completed donation
-    existing = await _find_completed_donation_by_github(gh_profile["username"], db)
-    if existing:
+        # Reject if this GitHub username already has a completed donation
+        existing = await _find_completed_donation_by_github(gh_profile["username"], db)
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"@{gh_profile['username']} is already on the donor wall!",
+            )
+
+        donation = _build_online_donation(payload, gh_profile)
+
+        db.add(donation)
+        await db.commit()
+        await db.refresh(donation)
+
+        return await _create_razorpay_order(donation, payload, db)
+    except HTTPException:
+        raise
+    except Exception as err:
+        await db.rollback()
+        logger.error("Failed to initiate donation: %s", err, exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"@{gh_profile['username']} is already on the donor wall!",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Donation initiation error: {str(err)}"
         )
-
-    donation = _build_online_donation(payload, gh_profile)
-
-    db.add(donation)
-    await db.commit()
-    await db.refresh(donation)
-
-    return await _create_razorpay_order(donation, payload, db)
 
 
 @router.post("/offline", response_model=DonationResponse, status_code=status.HTTP_201_CREATED)
