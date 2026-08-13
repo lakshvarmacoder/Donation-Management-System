@@ -25,16 +25,13 @@ app = FastAPI(
 # Fix Vercel Serverless path rewrite scope
 @app.middleware("http")
 async def fix_vercel_path_middleware(request, call_next):
-    path = request.scope.get("path", "")
-    
-    # 1. Check Vercel forwarded headers
-    for header_name in ["x-matched-path", "x-forwarded-path", "x-vercel-forwarded-path", "x-invoke-path"]:
+    for header_name in ["x-forwarded-uri", "x-original-url", "x-invoke-path"]:
         header_val = request.headers.get(header_name)
         if header_val and not header_val.startswith("/api/index"):
-            request.scope["path"] = header_val
+            request.scope["path"] = header_val.split("?")[0]
             return await call_next(request)
             
-    # 2. Strip Vercel rewritten file prefix if present
+    path = request.scope.get("path", "")
     if path.startswith("/api/index.py"):
         request.scope["path"] = path[len("/api/index.py"):] or "/"
     elif path.startswith("/api/index"):
