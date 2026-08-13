@@ -25,13 +25,21 @@ app = FastAPI(
 # Fix Vercel Serverless path rewrite scope
 @app.middleware("http")
 async def fix_vercel_path_middleware(request, call_next):
-    raw_path = (
-        request.headers.get("x-matched-path")
-        or request.headers.get("x-forwarded-path")
-        or request.headers.get("x-vercel-forwarded-path")
-    )
-    if raw_path and raw_path != request.scope["path"]:
-        request.scope["path"] = raw_path
+    path = request.scope.get("path", "")
+    
+    # 1. Check Vercel forwarded headers
+    for header_name in ["x-matched-path", "x-forwarded-path", "x-vercel-forwarded-path", "x-invoke-path"]:
+        header_val = request.headers.get(header_name)
+        if header_val and not header_val.startswith("/api/index"):
+            request.scope["path"] = header_val
+            return await call_next(request)
+            
+    # 2. Strip Vercel rewritten file prefix if present
+    if path.startswith("/api/index.py"):
+        request.scope["path"] = path[len("/api/index.py"):] or "/"
+    elif path.startswith("/api/index"):
+        request.scope["path"] = path[len("/api/index"):] or "/"
+        
     return await call_next(request)
 
 # Enable CORS for external client site integrations
