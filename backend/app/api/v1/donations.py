@@ -281,7 +281,7 @@ async def _create_razorpay_order(
             detail="Donation amount must be a finite number.",
         )
     try:
-        rzp_order = RazorpayService.create_order(
+        rzp_order = await RazorpayService.create_order(
             amount=amount,
             currency=payload.currency,
             receipt=str(donation.id)[:RECEIPT_ID_LENGTH],
