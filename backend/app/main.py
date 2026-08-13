@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -22,23 +22,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Fix Vercel Serverless path rewrite scope
-@app.middleware("http")
-async def fix_vercel_path_middleware(request, call_next):
-    for header_name in ["x-forwarded-uri", "x-original-url", "x-invoke-path"]:
-        header_val = request.headers.get(header_name)
-        if header_val and not header_val.startswith("/api/index"):
-            request.scope["path"] = header_val.split("?")[0]
-            return await call_next(request)
-            
-    path = request.scope.get("path", "")
-    if path.startswith("/api/index.py"):
-        request.scope["path"] = path[len("/api/index.py"):] or "/"
-    elif path.startswith("/api/index"):
-        request.scope["path"] = path[len("/api/index"):] or "/"
-        
-    return await call_next(request)
-
 # Enable CORS for external client site integrations
 app.add_middleware(
     CORSMiddleware,
@@ -49,12 +32,6 @@ app.add_middleware(
 )
 
 
-@app.get("/", tags=["Health"])
-async def root_check():
-    """Root status check endpoint."""
-    return {"status": "ok", "app": settings.app_name, "version": "1.0.0"}
-
-
 @app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint."""
@@ -63,3 +40,15 @@ async def health_check():
 
 # Register API v1 Routers
 app.include_router(api_v1_router, prefix="/api/v1")
+
+
+@app.get("/", tags=["Health"])
+async def root_check(request: Request):
+    """Root status check endpoint."""
+    return {
+        "status": "ok",
+        "app": settings.app_name,
+        "version": "1.0.0",
+        "scope_path": request.scope.get("path"),
+        "headers": dict(request.headers)
+    }
