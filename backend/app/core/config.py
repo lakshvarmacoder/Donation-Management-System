@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, Field
 from typing import Optional, List, Union
 import urllib.parse
 import json
@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     port: int = 5432
     dbname: str = "postgres"
     
-    raw_database_url: Optional[str] = None
-    database_url_env: Optional[str] = None
+    raw_database_url: Optional[str] = Field(default=None, validation_alias="RAW_DATABASE_URL")
+    database_url_val: Optional[str] = Field(default=None, validation_alias="DATABASE_URL")
     
     # Supabase Credentials
     supabase_url: Optional[str] = None
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        url = self.raw_database_url or self.database_url_env
+        url = self.raw_database_url or self.database_url_val
         if url and "YOUR_PROJECT_REF" not in url:
             return url
         pwd = urllib.parse.quote_plus(self.password) if self.password else ""
