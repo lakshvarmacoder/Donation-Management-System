@@ -107,29 +107,56 @@ async def create_donation(payload: DonationCreate, db: AsyncSession = Depends(ge
 @router.post("/offline", response_model=DonationResponse, status_code=status.HTTP_201_CREATED)
 async def create_offline_donation(payload: OfflineDonationCreate, db: AsyncSession = Depends(get_db)):
     """Record an offline cash/check donation directly in the database."""
-    donation = _build_offline_donation(payload)
-
-    db.add(donation)
-    await db.commit()
-    await db.refresh(donation)
-    return _to_donation_response(donation)
+    try:
+        donation = _build_offline_donation(payload)
+        db.add(donation)
+        await db.commit()
+        await db.refresh(donation)
+        return _to_donation_response(donation)
+    except Exception as err:
+        await db.rollback()
+        logger.error("Failed to create offline donation: %s", err, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Database write error: {str(err)}"
+        )
 
 
 @router.post("/verify", response_model=DonationResponse)
 async def verify_payment(payload: PaymentVerification, db: AsyncSession = Depends(get_db)):
     """Verify Razorpay payment and mark donation as completed."""
-    donation = await _find_donation_by_order_id(payload.razorpay_order_id, db)
-    _assert_signature_valid(payload)
-    await _mark_donation_completed(donation, payload.razorpay_payment_id, db)
-    return _to_donation_response(donation)
+    try:
+        donation = await _find_donation_by_order_id(payload.razorpay_order_id, db)
+        _assert_signature_valid(payload)
+        await _mark_donation_completed(donation, payload.razorpay_payment_id, db)
+        return _to_donation_response(donation)
+    except HTTPException:
+        raise
+    except Exception as err:
+        await db.rollback()
+        logger.error("Failed to verify payment: %s", err, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Payment verification error: {str(err)}"
+        )
 
 
 @router.delete("/{donation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_donation(donation_id: UUID, db: AsyncSession = Depends(get_db)):
     """Remove an erroneous donation record (admin action)."""
-    donation = await _find_donation_by_id(donation_id, db)
-    await db.delete(donation)
-    await db.commit()
+    try:
+        donation = await _find_donation_by_id(donation_id, db)
+        await db.delete(donation)
+        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as err:
+        await db.rollback()
+        logger.error("Failed to delete donation: %s", err, exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Deletion error: {str(err)}"
+        )
 
 
 # ─── Private Helpers (Step-Down Rule) ────────────────────────────────────────────
